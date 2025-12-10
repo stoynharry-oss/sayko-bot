@@ -1,0 +1,177 @@
+import os
+import telebot
+import wikipedia
+import sympy as sp
+import re
+from datetime import datetime
+
+# Получаем токен из переменных окружения
+TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+bot = telebot.TeleBot(TOKEN)
+
+# Настройка Wikipedia
+wikipedia.set_lang("ru")
+
+print("🤖 Sayko Bot запущен на Render!")
+
+# Простая база для статистики
+user_stats = {}
+
+# Команда /start
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    user = message.from_user
+    
+    # Сохраняем статистику
+    user_id = user.id
+    if user_id not in user_stats:
+        user_stats[user_id] = {
+            'name': user.first_name,
+            'messages': 0,
+            'last_active': datetime.now()
+        }
+    
+    welcome_text = f"""
+🎓 Привет, {user.first_name}!
+
+Я Sayko - теперь работаю на Render.com!
+Стал быстрее и стабильнее 🚀
+
+✨ Мои возможности:
+• 🧮 Математика: 2+3, x+5=10
+• 📚 Ответы на вопросы
+• 📐 Решение уравнений
+• 📖 Поиск информации
+
+Просто напиши вопрос или пример!
+"""
+    bot.reply_to(message, welcome_text)
+    user_stats[user_id]['messages'] += 1
+
+# Команда /help
+@bot.message_handler(commands=['help'])
+def send_help(message):
+    help_text = """
+📚 Как использовать Sayko:
+
+🎯 Просто пиши:
+• Математика: 2+3, 10/2, x+5=10
+• Уравнения: решить x^2-4=0
+• Вопросы: Что такое фотосинтез?
+
+🧮 Примеры:
+• 2+3*5
+• реши 2x+5=15
+• Что такое Солнце?
+
+🚀 Бот работает 24/7 на Render.com
+"""
+    bot.reply_to(message, help_text)
+    
+    user_id = message.from_user.id
+    if user_id in user_stats:
+        user_stats[user_id]['messages'] += 1
+
+# Команда /stats
+@bot.message_handler(commands=['stats'])
+def send_stats(message):
+    total_users = len(user_stats)
+    total_messages = sum(stats['messages'] for stats in user_stats.values())
+    
+    stats_text = f"""
+📊 Статистика Sayko:
+
+👥 Уникальных пользователей: {total_users}
+💬 Всего сообщений: {total_messages}
+📅 Дата: {datetime.now().strftime("%Y-%m-%d")}
+
+🚀 Работает на Render.com
+"""
+    bot.reply_to(message, stats_text)
+
+# Решение математических задач
+def solve_math_problem(text):
+    try:
+        text = text.lower().strip()
+        
+        # Убираем "реши" если есть
+        if text.startswith('реши'):
+            text = text[4:].strip()
+        
+        # Простые вычисления
+        if all(c in '0123456789+-*/.() ' for c in text.replace(' ', '')):
+            expr = text.replace(' ', '').replace('^', '**')
+            result = eval(expr)
+            return f"🧮 {text} = {result}"
+        
+        # Уравнения с x
+        if '=' in text and 'x' in text:
+            # Очищаем уравнение
+            eq = text.replace(' ', '').replace('^', '**')
+            
+            if '=' in eq:
+                left, right = eq.split('=')
+                x = sp.symbols('x')
+                
+                # Создаем уравнение
+                equation = sp.Eq(sp.sympify(left), sp.sympify(right))
+                solution = sp.solve(equation, x)
+                
+                if solution:
+                    return f"📐 Уравнение: {text}\n\n📊 Решение: x = {solution}"
+        
+        return None
+        
+    except Exception as e:
+        print(f"Math error: {e}")
+        return None
+
+# Обработка всех сообщений
+@bot.message_handler(func=lambda message: True)
+def handle_all_messages(message):
+    user_id = message.from_user.id
+    text = message.text.strip()
+    
+    # Обновляем статистику
+    if user_id not in user_stats:
+        user_stats[user_id] = {
+            'name': message.from_user.first_name,
+            'messages': 0,
+            'last_active': datetime.now()
+        }
+    user_stats[user_id]['messages'] += 1
+    user_stats[user_id]['last_active'] = datetime.now()
+    
+    # Пропускаем команды
+    if text.startswith('/'):
+        return
+    
+    # Пробуем решить математику
+    math_result = solve_math_problem(text)
+    if math_result:
+        bot.reply_to(message, math_result)
+        return
+    
+    # Ищем в Wikipedia
+    try:
+        search_results = wikipedia.search(text)
+        if search_results:
+            summary = wikipedia.summary(search_results[0], sentences=2)
+            bot.reply_to(message, f"📚 {summary}")
+            return
+    except:
+        pass
+    
+    # Если ничего не помогло
+    bot.reply_to(message, 
+        "🤔 Я могу помочь с:\n"
+        "• Математикой (2+3, x+5=10)\n"
+        "• Уравнениями (реши x^2-4=0)\n"
+        "• Общими вопросами\n\n"
+        "Попробуйте математический пример!")
+
+# Запуск бота
+if __name__ == "__main__":
+    print("✅ Бот готов к работе!")
+    print("📞 Ищите: @SaykoStudyBot в Telegram")
+    bot.polling(none_stop=True)
